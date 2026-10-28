@@ -1,7 +1,108 @@
-export default function App() {
+import { useEffect, useRef, useState } from 'react'
+import Peer from 'peerjs'
+import { QRCodeSVG } from 'qrcode.react'
+function Smartphone({ hostId }: { hostId: string }) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  useEffect(() => {
+    let stream: MediaStream | null = null
+    const peer = new Peer()
+    async function startCamera() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' },
+          audio: false,
+        })
+
+        if (peer.destroyed) {
+          stream.getTracks().forEach((track) => track.stop())
+          return
+        }
+
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+        }
+
+      } catch (error) {
+        console.error('カメラの取得に失敗しました', error)
+      }
+    }
+    startCamera()
+
+    return () => {
+      stream?.getTracks().forEach((track) => track.stop())
+      stream = null
+      peer.destroy()
+    }
+  }, [hostId])
   return (
-    <div className="min-h-screen bg-blue-700 text-white flex items-center justify-center">
-      <h1 className="text-4xl font-bold">こんにちは</h1>
+    <div className="h-dvh overflow-hidden bg-blue-100 p-4">
+      <div className="flex flex-row items-center gap-4">
+        <h1 className="mb-4 text-sm font-bold">
+          スマホカメラ
+        </h1>
+        <p className="mb-4 break-all">
+          接続先PC：{hostId}
+        </p>
+      </div>
+
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        className="w-full rounded bg-black"
+      />
     </div>
   )
 }
+
+function App() {
+  const [peerId, setPeerId] = useState('')
+  const smartphoneUrl = `${window.location.origin}${import.meta.env.BASE_URL}?host=${peerId}`
+  useEffect(() => {
+    const peer = new Peer()
+
+    peer.on('open', (id) => {
+      setPeerId(id)
+    })
+
+    return () => {
+      peer.destroy()
+    }
+  }, [])
+  return (
+    <div className="min-h-screen bg-gray-100 p-8">
+      <h1 className="mb-4 text-2xl font-bold">
+        スマホ映像モニター
+      </h1>
+
+      <p>PCのPeer ID：<span className="mt-2 break-all rounded bg-white p-4">
+        {peerId || '接続待機中...'}
+      </span></p>
+      {peerId && (
+        <div className="flex flex-row items-center gap-4">
+          <div className="mt-6 inline-block rounded bg-white p-4">
+            <a
+              href={smartphoneUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block"
+            >
+              <QRCodeSVG
+                value={smartphoneUrl}
+                size={200}
+              />
+            </a>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Main() {
+  const hostId = new URLSearchParams(window.location.search).get('host')
+  return hostId ? <Smartphone hostId={hostId} /> : <App />
+}
+
+export default Main
